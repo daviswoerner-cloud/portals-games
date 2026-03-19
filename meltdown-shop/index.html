@@ -414,6 +414,47 @@
         coins = parseInt(params.get('coins')) || 0;
         render();
 
+        // The initial SendMessageToIframes from Portals often fires BEFORE
+        // this iframe finishes loading, so we miss the state message.
+        // Fix: on load, tell Unity we're ready by requesting a state refresh.
+        // We use a dedicated "shop_state_req" quest that triggers
+        // SendMessageToIframes without re-opening the iframe.
+        // Fallback: retry a few times in case of slow load.
+        if (sdk) {
+            let gotState = false;
+
+            // Wrap message listener to track state arrival
+            const origListener = sdk._messageListener;
+            sdk.setMessageListener((message) => {
+                if (message.startsWith('shop:')) {
+                    gotState = true;
+                    const parts = message.replace('shop:', '').split(',');
+                    if (parts.length >= 7) {
+                        coins = parseInt(parts[0]) || 0;
+                        inventory['p_shield']     = parseInt(parts[1]) || 0;
+                        inventory['p_amplifier']  = parseInt(parts[2]) || 0;
+                        inventory['p_hackkit']    = parseInt(parts[3]) || 0;
+                        inventory['p_teleporter'] = parseInt(parts[4]) || 0;
+                        inventory['p_mine']       = parseInt(parts[5]) || 0;
+                        inventory['p_scanner']    = parseInt(parts[6]) || 0;
+                        render();
+                    }
+                }
+            });
+
+            // Request state refresh from Unity at intervals
+            function requestRefresh() {
+                if (gotState) return;
+                sdk.sendMessageToUnity(JSON.stringify({
+                    TaskName: 'shop_state_req',
+                    TaskTargetState: 'SetNotActiveToCompleted'
+                }));
+            }
+            setTimeout(requestRefresh, 300);
+            setTimeout(requestRefresh, 1000);
+            setTimeout(requestRefresh, 2500);
+        }
+
         // Dev mode preview
         if (!sdk) {
             coins = 25;
