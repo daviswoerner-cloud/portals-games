@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MELTDOWN HUD</title>
+    <script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+    <style>
+        html, body {
+            margin: 0; padding: 0;
+            background: transparent !important;
+            overflow: hidden;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        .hud {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            padding: 6px 10px;
+            background: linear-gradient(170deg, rgba(2, 12, 28, 0.88), rgba(0, 6, 18, 0.92));
+            border: 1px solid rgba(0, 140, 220, 0.35);
+            border-radius: 12px;
+            box-shadow:
+                0 0 25px rgba(0, 170, 255, 0.15),
+                inset 0 1px 0 rgba(0, 200, 255, 0.1);
+            z-index: 100;
+        }
+
+        /* Scanline */
+        .hud::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 12px;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 170, 255, 0.01) 2px, rgba(0, 170, 255, 0.01) 4px);
+            pointer-events: none;
+        }
+
+        /* ─── COIN DISPLAY ─── */
+        .coin-display {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(255, 180, 0, 0.06));
+            border: 1px solid rgba(255, 215, 0, 0.25);
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 800;
+            color: #FFD700;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+            min-width: 50px;
+            justify-content: center;
+        }
+        .coin-icon {
+            width: 18px; height: 18px;
+            filter: drop-shadow(0 0 3px rgba(255,215,0,0.4));
+        }
+
+        /* ─── ITEM SLOT ─── */
+        .slot {
+            position: relative;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, rgba(0, 20, 45, 0.7), rgba(0, 30, 60, 0.5));
+            border: 1px solid rgba(0, 100, 180, 0.25);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+
+        .slot:hover:not(.empty):not(.cooldown) {
+            background: linear-gradient(135deg, rgba(0, 40, 80, 0.8), rgba(0, 60, 120, 0.6));
+            border-color: #00CCFF;
+            box-shadow: 0 0 12px rgba(0, 200, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .slot:active:not(.empty):not(.cooldown) {
+            transform: translateY(0) scale(0.95);
+        }
+
+        .slot.empty {
+            opacity: 0.25;
+            cursor: default;
+        }
+
+        .slot.cooldown {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .slot.cooldown::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+        }
+
+        .slot.used {
+            animation: useFlash 0.6s ease;
+        }
+        @keyframes useFlash {
+            0% { background: rgba(0, 255, 200, 0.5); border-color: #00FFCC; box-shadow: 0 0 20px rgba(0,255,200,0.4); }
+            100% { background: linear-gradient(135deg, rgba(0, 20, 45, 0.7), rgba(0, 30, 60, 0.5)); border-color: rgba(0,100,180,0.25); }
+        }
+
+        .slot-icon {
+            font-size: 22px;
+            line-height: 1;
+            filter: drop-shadow(0 0 3px rgba(255,255,255,0.2));
+        }
+
+        /* Badge count */
+        .slot-qty {
+            position: absolute;
+            top: 2px;
+            right: 3px;
+            font-size: 9px;
+            font-weight: 800;
+            color: #00EEFF;
+            background: rgba(0, 20, 50, 0.85);
+            border: 1px solid rgba(0, 180, 255, 0.4);
+            border-radius: 4px;
+            padding: 0 3px;
+            line-height: 14px;
+            text-shadow: 0 0 4px rgba(0, 200, 255, 0.5);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            bottom: 62px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 10, 30, 0.95);
+            border: 1px solid #00AAFF;
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 140px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 200;
+            box-shadow: 0 0 15px rgba(0, 170, 255, 0.2);
+        }
+        .slot:hover .tooltip {
+            opacity: 1;
+        }
+        .tooltip-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #00CCFF;
+            letter-spacing: 0.5px;
+        }
+        .tooltip-desc {
+            font-size: 10px;
+            color: #7799BB;
+            margin-top: 3px;
+        }
+        .tooltip-action {
+            font-size: 10px;
+            font-weight: 700;
+            color: #00FF88;
+            margin-top: 5px;
+            letter-spacing: 1px;
+        }
+
+        /* ─── TOAST ─── */
+        .toast {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-60px);
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            transition: transform 0.3s ease;
+            z-index: 300;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .toast.success { background: rgba(0, 220, 120, 0.92); color: #003322; box-shadow: 0 0 20px rgba(0, 220, 120, 0.3); }
+        .toast.error   { background: rgba(255, 70, 70, 0.92); color: #FFF; box-shadow: 0 0 20px rgba(255, 70, 70, 0.3); }
+        .toast.info    { background: rgba(0, 170, 255, 0.92); color: #FFF; box-shadow: 0 0 20px rgba(0, 170, 255, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="hud" id="hud"></div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ═══════════════════════════════════════
+        // MELTDOWN HUD — Item Usage Interface
+        // Persistent overlay showing inventory
+        // ═══════════════════════════════════════
+        const ITEMS = [
+            { id: 1, name: 'Shield',             icon: '\u{1F6E1}',  desc: 'Blocks next steal/loss', variable: 'p_shield',     quest: 'use_shield',     stackable: true  },
+            { id: 2, name: 'Amplifier',           icon: '\u{1F4E1}',  desc: 'Doubles next coin gain', variable: 'p_amplifier',  quest: 'use_amplifier',  stackable: false },
+            { id: 3, name: 'Hacking Kit',         icon: '\u{1F4BB}',  desc: 'Steal coins from player', variable: 'p_hackkit',    quest: 'use_hackkit',    stackable: false },
+            { id: 4, name: 'Teleporter',          icon: '\u{26A1}',   desc: 'Warp to any space',       variable: 'p_teleporter', quest: 'use_teleporter', stackable: false },
+            { id: 5, name: 'Prox Mine',           icon: '\u{1F4A3}',  desc: 'Trap a space (-5 coins)', variable: 'p_mine',       quest: 'use_mine',       stackable: true  },
+            { id: 6, name: 'Scanner',             icon: '\u{1F50D}',  desc: 'Peek at next 3 spaces',   variable: 'p_scanner',    quest: 'use_scanner',    stackable: false },
+        ];
+
+        let coins = 0;
+        let inventory = {};
+        let cooldowns = {};  // quest -> timestamp
+        const COOLDOWN_MS = 2000;
+
+        const sdk = typeof PortalsSdk !== 'undefined' ? PortalsSdk : null;
+
+        // ─── RENDER ───
+        function render() {
+            const hud = document.getElementById('hud');
+            hud.innerHTML = '';
+
+            // Coin display first
+            const coinEl = document.createElement('div');
+            coinEl.className = 'coin-display';
+            coinEl.innerHTML = `
+                <svg class="coin-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="bold" fill="#8B6914">$</text></svg>
+                <span>${coins}</span>
+            `;
+            hud.appendChild(coinEl);
+
+            // Item slots
+            ITEMS.forEach(item => {
+                const qty = inventory[item.variable] || 0;
+                const onCooldown = cooldowns[item.quest] && (Date.now() - cooldowns[item.quest] < COOLDOWN_MS);
+                const isEmpty = qty <= 0;
+
+                const slot = document.createElement('div');
+                slot.className = 'slot' + (isEmpty ? ' empty' : '') + (onCooldown ? ' cooldown' : '');
+
+                let html = `<div class="slot-icon">${item.icon}</div>`;
+                if (qty > 1 && item.stackable) {
+                    html += `<div class="slot-qty">x${qty}</div>`;
+                } else if (qty === 1 && item.stackable) {
+                    html += `<div class="slot-qty">x1</div>`;
+                }
+
+                // Tooltip
+                if (!isEmpty) {
+                    html += `
+                        <div class="tooltip">
+                            <div class="tooltip-name">${item.name}</div>
+                            <div class="tooltip-desc">${item.desc}</div>
+                            <div class="tooltip-action">${onCooldown ? 'COOLDOWN...' : 'CLICK TO USE'}</div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="tooltip">
+                            <div class="tooltip-name">${item.name}</div>
+                            <div class="tooltip-desc">Not owned</div>
+                        </div>
+                    `;
+                }
+
+                slot.innerHTML = html;
+
+                if (!isEmpty && !onCooldown) {
+                    slot.addEventListener('click', () => useItem(item, slot));
+                }
+
+                hud.appendChild(slot);
+            });
+        }
+
+        // ─── USE ITEM ───
+        function useItem(item, slotEl) {
+            const qty = inventory[item.variable] || 0;
+            if (qty <= 0) return;
+            if (cooldowns[item.quest] && (Date.now() - cooldowns[item.quest] < COOLDOWN_MS)) return;
+
+            // Decrement locally (optimistic)
+            inventory[item.variable] = qty - 1;
+            cooldowns[item.quest] = Date.now();
+
+            // Flash animation
+            slotEl.classList.add('used');
+            setTimeout(() => slotEl.classList.remove('used'), 600);
+
+            toast(item.name + ' activated!', 'success');
+
+            // Tell Unity to process the item use
+            if (sdk) {
+                sdk.sendMessageToUnity(JSON.stringify({
+                    TaskName: item.quest,
+                    TaskTargetState: 'SetNotActiveToCompleted'
+                }));
+            }
+
+            // Re-render after cooldown
+            render();
+            setTimeout(render, COOLDOWN_MS + 100);
+        }
+
+        // ─── TOAST ───
+        function toast(msg, type) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.className = 'toast show ' + (type || 'info');
+            clearTimeout(el._timer);
+            el._timer = setTimeout(() => { el.className = 'toast'; }, 2200);
+        }
+
+        // ─── CLOSE SHOP (sends to both shop iframe and this HUD) ───
+        function closeShop() {
+            if (sdk) {
+                sdk.sendMessageToUnity(JSON.stringify({
+                    TaskName: '110_shop_menu',
+                    TaskTargetState: 'ToNotActive'
+                }));
+                sdk.closeIframe();
+            }
+        }
+
+        // ─── SDK MESSAGE LISTENER ───
+        if (sdk) {
+            sdk.setMessageListener((message) => {
+                // Format: "hud:|p_coins|,|p_shield|,|p_amplifier|,|p_hackkit|,|p_teleporter|,|p_mine|,|p_scanner|"
+                if (message.startsWith('hud:')) {
+                    const parts = message.replace('hud:', '').split(',');
+                    if (parts.length >= 7) {
+                        coins = parseInt(parts[0]) || 0;
+                        inventory['p_shield']     = parseInt(parts[1]) || 0;
+                        inventory['p_amplifier']  = parseInt(parts[2]) || 0;
+                        inventory['p_hackkit']    = parseInt(parts[3]) || 0;
+                        inventory['p_teleporter'] = parseInt(parts[4]) || 0;
+                        inventory['p_mine']       = parseInt(parts[5]) || 0;
+                        inventory['p_scanner']    = parseInt(parts[6]) || 0;
+                        render();
+                    }
+                }
+                // Also accept shop: prefix (shared state format)
+                if (message.startsWith('shop:')) {
+                    const parts = message.replace('shop:', '').split(',');
+                    if (parts.length >= 7) {
+                        coins = parseInt(parts[0]) || 0;
+                        inventory['p_shield']     = parseInt(parts[1]) || 0;
+                        inventory['p_amplifier']  = parseInt(parts[2]) || 0;
+                        inventory['p_hackkit']    = parseInt(parts[3]) || 0;
+                        inventory['p_teleporter'] = parseInt(parts[4]) || 0;
+                        inventory['p_mine']       = parseInt(parts[5]) || 0;
+                        inventory['p_scanner']    = parseInt(parts[6]) || 0;
+                        render();
+                    }
+                }
+            });
+
+            // Request state on load (same pattern as shop)
+            let gotState = false;
+            const origListener = sdk._messageListener;
+
+            function requestRefresh() {
+                if (gotState) return;
+                sdk.sendMessageToUnity(JSON.stringify({
+                    TaskName: 'hud_state_req',
+                    TaskTargetState: 'SetNotActiveToCompleted'
+                }));
+            }
+            setTimeout(requestRefresh, 300);
+            setTimeout(requestRefresh, 1000);
+            setTimeout(requestRefresh, 2500);
+        }
+
+        // ─── INITIAL RENDER ───
+        render();
+
+        // Dev mode
+        if (!sdk) {
+            coins = 15;
+            inventory = { p_shield: 2, p_amplifier: 1, p_mine: 3 };
+            render();
+            console.log('Dev mode -- SDK not available');
+        }
+    </script>
+</body>
+</html>
