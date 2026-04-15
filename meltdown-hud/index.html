@@ -189,10 +189,10 @@
     }
   }
 
-  // Message format from Portals:  "hud:<coins>,<shield>,<amp>,<hack>,<tele>,<mine>,<scan>"
+  // Accepts "hud:<coins>,<6 items>" OR "shop:<coins>,<6 items>" (same format)
   function parseMessage(msg) {
     if (typeof msg !== 'string') return;
-    const m = msg.match(/^hud:([\d.\-,]+)/);
+    const m = msg.match(/^(?:hud|shop):([\d.\-,]+)/);
     if (!m) return;
     const parts = m[1].split(',').map(v => parseFloat(v) || 0);
     state.coins      = parts[0] || 0;
